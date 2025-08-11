@@ -9,6 +9,8 @@ export default function Home() {
     const [isTyping, setIsTyping] = useState(false);
     const [copied, setCopied] = useState(false);
     const [currentTime, setCurrentTime] = useState("");
+    const [generationCount, setGenerationCount] = useState(0); // Licznik generacji
+    const [lastFeatures, setLastFeatures] = useState(""); // Ostatnie cechy
 
     // Update current time
     useEffect(() => {
@@ -46,35 +48,79 @@ export default function Home() {
         setDisplayedText("");
         setIsTyping(false);
 
-        // Simulate API call - replace with your actual API
-        setTimeout(() => {
-            const mockDescription = `PRODUKT ZIDENTYFIKOWANY...
+        try {
+            // Zwiększ licznik dla różnorodności
+            const currentCount = generationCount + 1;
+            setGenerationCount(currentCount);
+
+            // Sprawdź czy to te same cechy
+            const sameFeatures = features === lastFeatures;
+            setLastFeatures(features);
+
+            // Wywołanie prawdziwego API
+            const response = await fetch('/api/generate-description', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    features: features,
+                    generationCount: currentCount, // Dodaj licznik
+                    isRegeneration: sameFeatures, // Flaga czy to regeneracja
+                    timestamp: Date.now() // Timestamp dla unikalności
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            // Formatuj odpowiedź w stylu terminala
+            const formattedDescription = `PRODUKT ZIDENTYFIKOWANY... [GENERACJA #${currentCount}]
 
 === ANALIZA CECH ===
 ${features}
 
 === WYGENEROWANY OPIS ===
-Rewolucyjny produkt łączący nowoczesną technologię z funkcjonalnością. 
-Charakteryzuje się wysoką jakością wykonania oraz innowacyjnym designem.
+${data.description}
 
-Kluczowe zalety:
-• Zaawansowane funkcje dostosowane do potrzeb użytkownika
-• Intuicyjna obsługa i ergonomiczny design
-• Niezawodność potwierdzona testami jakości
-• Kompatybilność z najnowszymi standardami
+${data.style ? `=== UŻYTY STYL: ${data.style.toUpperCase()} ===` : ''}
+=== STATUS: KOMPLETNE ===
+=== SEED: ${data.seed || 'UNKNOWN'} ===`;
 
-Idealny wybór dla wymagających klientów poszukujących najwyższej jakości rozwiązań.
+            setDescription(formattedDescription);
 
-=== STATUS: KOMPLETNE ===`;
+        } catch (error) {
+            console.error('Error generating description:', error);
+            const errorMessage = `BŁĄD SYSTEMU...
 
-            setDescription(mockDescription);
+
+=== PRÓBA PONOWNA ===
+Sprawdź połączenie i spróbuj ponownie.
+
+=== STATUS: BŁĄD ===`;
+            setDescription(errorMessage);
+        } finally {
             setLoading(false);
-        }, 2000);
+        }
     };
 
     const copyToClipboard = async () => {
         try {
-            await navigator.clipboard.writeText(description);
+            // Kopiuj tylko czysty opis bez formatowania terminala
+            const cleanDescription = description
+                .split('=== WYGENEROWANY OPIS ===')[1]
+                ?.split('=== UŻYTY STYL:')[0]
+                ?.split('=== STATUS:')[0]
+                ?.trim();
+
+            await navigator.clipboard.writeText(cleanDescription || description);
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         } catch (err) {
@@ -115,7 +161,7 @@ Idealny wybór dla wymagających klientów poszukujących najwyższej jakości r
                             <span className="text-green-300 text-sm ml-4">TERMINAL v2.1.0</span>
                         </div>
                         <div className="text-green-300 text-sm">
-                            {currentTime} | STATUS: ACTIVE
+                            {currentTime} | STATUS: ACTIVE | GEN: {generationCount}
                         </div>
                     </div>
 
@@ -181,7 +227,7 @@ Idealny wybór dla wymagających klientów poszukujących najwyższej jakości r
                                         </div>
                                     </div>
                                 ) : (
-                                    <span>{'>'} EXECUTE GENERATION.EXE</span>
+                                    <span>{'>'} EXECUTE GENERATION.EXE {generationCount > 0 && `[RETRY #${generationCount}]`}</span>
                                 )}
                             </button>
                         </div>
